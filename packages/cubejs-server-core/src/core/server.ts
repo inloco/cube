@@ -48,6 +48,7 @@ import type {
   DriverConfig,
 } from './types';
 import { ContextToOrchestratorIdFn, ContextAcceptanceResult, ContextAcceptanceResultHttp, ContextAcceptanceResultWs, ContextAcceptor } from './types';
+import { Metrics } from './metrics';
 
 const { version } = require('../../../package.json');
 
@@ -408,6 +409,22 @@ export class CubejsServerCore {
   public async initApp(app: ExpressApplication) {
     const apiGateway = this.apiGateway();
     apiGateway.initApp(app);
+
+    const metricsContext = {securityContext: undefined, authInfo: undefined, requestId: "metrics"}
+
+    const metrics = new Metrics({
+      scheduledRefreshTimeZones: this.options.scheduledRefreshTimeZones ?? [],
+      compilerApi: this.getCompilerApi.bind(this),
+      orchestratorApi: this.getOrchestratorApi.bind(this),
+      refreshScheduler: this.getRefreshScheduler(),
+      metricsContext: metricsContext,
+      logger: this.logger
+    })
+
+    app.get('/metrics', (async (req, res) => {
+      const allMetrics = await metrics.getMetrics()
+      res.status(200).send(allMetrics)
+    }));
 
     if (this.options.devServer) {
       this.devServer.initDevEnv(app, this.options);
