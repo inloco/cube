@@ -38,7 +38,7 @@
     "@types/node": "^14",
     "cargo-cp-artifact": "^0.1",
     "jest": "^27",
-    "mysql2": "^2.3.3",
+    "mysql2": "^3.9.4",
     "typescript": "~5.2.2",
     "uuid": "^8.3.2"
   },
