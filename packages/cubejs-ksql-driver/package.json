@@ -29,7 +29,7 @@
     "@cubejs-backend/schema-compiler": "^0.35.43",
     "@cubejs-backend/shared": "^0.35.43",
     "async-mutex": "0.3.2",
-    "axios": "^0.21.1",
+    "axios": "^0.30.2",
     "kafkajs": "^2.2.3",
     "sqlstring": "^2.3.1"
   },
