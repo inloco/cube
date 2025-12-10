@@ -146,6 +146,7 @@ export class PrestoDriver extends BaseDriver implements DriverInterface {
       const unloadSchema = this.config.unloadSchema!;
       const unloadCatalog = this.config.unloadCatalog!;
       const trinoTable = `${unloadCatalog}.${unloadSchema}."${tableName}"`
+      const s3Prefix = this.config.unloadPrefix ? `${this.config.unloadPrefix}/${tableName}` : undefined;
 
       const dropIfExistsSql = /* sql */`
         DROP TABLE IF EXISTS ${trinoTable}
@@ -153,11 +154,21 @@ export class PrestoDriver extends BaseDriver implements DriverInterface {
       await this.query(dropIfExistsSql, [])
 
       const unloadSql = /* sql */`
-        CREATE TABLE ${unloadCatalog}.${unloadSchema}."${tableName}"
+        CREATE TABLE ${trinoTable}
         WITH (FORMAT='TEXTFILE') AS ${unloadOptions.query!.sql}
       `
+
       await this.query(unloadSql, unloadOptions.query!.params)
+
       const columns = await this.tableColumns(unloadCatalog, unloadSchema, tableName)
+
+      // try {
+      //   const bucketInfo = this.config.unloadBucket ? `s3://${this.config.unloadBucket}/${s3Prefix}` : '(no unloadBucket configured)';
+      //   (globalThis as any).console?.log('[PrestoDriver] Unload completed. Temp table:', trinoTable, 'Export prefix:', s3Prefix, 'Bucket path:', bucketInfo);
+      // } catch (_e) {
+      // }
+
+      // await this.query(dropIfExistsSql, [])
 
       return columns;
   }
