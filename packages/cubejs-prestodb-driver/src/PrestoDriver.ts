@@ -162,15 +162,13 @@ export class PrestoDriver extends BaseDriver implements DriverInterface {
 
       const columns = await this.tableColumns(unloadCatalog, unloadSchema, tableName)
 
-      // Log table and export location before dropping it for troubleshooting
-      try {
-        const bucketInfo = this.config.unloadBucket ? `s3://${this.config.unloadBucket}/${s3Prefix}` : '(no unloadBucket configured)';
-        (globalThis as any).console?.log('[PrestoDriver] Unload completed. Temp table:', trinoTable, 'Export prefix:', s3Prefix, 'Bucket path:', bucketInfo);
-      } catch (_e) {
-        // avoid throwing if console logging triggers any unexpected error
-      }
+      // try {
+      //   const bucketInfo = this.config.unloadBucket ? `s3://${this.config.unloadBucket}/${s3Prefix}` : '(no unloadBucket configured)';
+      //   (globalThis as any).console?.log('[PrestoDriver] Unload completed. Temp table:', trinoTable, 'Export prefix:', s3Prefix, 'Bucket path:', bucketInfo);
+      // } catch (_e) {
+      // }
 
-      await this.query(dropIfExistsSql, [])
+      // await this.query(dropIfExistsSql, [])
 
       return columns;
   }
