@@ -157,14 +157,11 @@ export class PrestoDriver extends BaseDriver implements DriverInterface {
         WITH (FORMAT='TEXTFILE') AS ${unloadOptions.query!.sql}
       `
 
-      try {
-        await this.query(unloadSql, unloadOptions.query!.params)
-      } finally {
-        // Ensure intermediate table is cleaned up
-        await this.query(dropIfExistsSql, [])
-      }
+      await this.query(unloadSql, unloadOptions.query!.params)
 
       const columns = await this.tableColumns(unloadCatalog, unloadSchema, tableName)
+
+      await this.query(dropIfExistsSql, [])
 
       return columns;
   }
