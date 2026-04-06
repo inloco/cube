@@ -70,7 +70,12 @@
     "@types/ramda": "0.27.40",
     "@octokit/plugin-paginate-rest": "^9.2.2",
     "parse-url": "^8.1.0",
-    "tar": "^6.2.1"
+    "tar": "^6.2.1",
+    "handlebars": "^4.7.9",
+    "lodash.template": "^4.18.0",
+    "minimatch": "^3.1.4",
+    "tough-cookie": "^4.1.3",
+    "jws": "^4.0.1"
   },
   "license": "MIT",
   "packageManager": "yarn@1.22.19"

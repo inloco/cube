@@ -192,7 +192,7 @@ describe('API Gateway', () => {
       {
         checkAuth: (req: Request, authorization) => {
           if (authorization) {
-            req.authInfo = jwt.verify(authorization, API_SECRET);
+            req.authInfo = jwt.verify(authorization, API_SECRET, { algorithms: ['HS256'] });
           }
         },
         queryRewrite
@@ -232,7 +232,7 @@ describe('API Gateway', () => {
       {
         checkAuth: (req: Request, authorization) => {
           if (authorization) {
-            jwt.verify(authorization, API_SECRET);
+            jwt.verify(authorization, API_SECRET, { algorithms: ['HS256'] });
             req.authInfo = authorization;
           }
         },
@@ -396,7 +396,7 @@ describe('API Gateway', () => {
       {
         checkAuth: (req: Request, authorization) => {
           if (authorization) {
-            jwt.verify(authorization, API_SECRET);
+            jwt.verify(authorization, API_SECRET, { algorithms: ['HS256'] });
             req.authInfo = authorization;
           }
         },
