@@ -1,4 +1,4 @@
-FROM node:18.20.1-bullseye-slim AS base
+FROM node:20.19.5-bookworm-slim AS base
 
 ARG IMAGE_VERSION=dev
 
@@ -8,7 +8,7 @@ ENV CI=0
 
 RUN DEBIAN_FRONTEND=noninteractive \
     && apt-get update \
-    && apt-get install -y --no-install-recommends rxvt-unicode libssl1.1 curl \
+    && apt-get install -y --no-install-recommends rxvt-unicode libssl3 curl \
        cmake python3 gcc g++ make cmake openjdk-11-jdk-headless \
     && rm -rf /var/lib/apt/lists/*
 

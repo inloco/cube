@@ -193,7 +193,7 @@ describe('test authorization', () => {
         if (auth) {
           await pausePromise(500);
 
-          req.authInfo = jwt.verify(auth, 'secret');
+          req.authInfo = jwt.verify(auth, 'secret', { algorithms: ['HS256'] });
         }
       }
     });
@@ -266,7 +266,7 @@ describe('test authorization', () => {
     const { app } = createApiGateway(handlerMock, loggerMock, {
       checkAuth: (req: Request, auth?: string) => {
         if (auth) {
-          req.authInfo = jwt.verify(auth, 'secret');
+          req.authInfo = jwt.verify(auth, 'secret', { algorithms: ['HS256'] });
         }
       }
     });
@@ -358,7 +358,7 @@ describe('test authorization', () => {
       checkAuthMiddleware: (req: Request, res, next) => {
         try {
           if (req.headers.authorization) {
-            req.authInfo = jwt.verify(req.headers.authorization, 'secret');
+            req.authInfo = jwt.verify(req.headers.authorization, 'secret', { algorithms: ['HS256'] });
           }
 
           next();

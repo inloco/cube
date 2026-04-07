@@ -1,3 +1,4 @@
+import { Algorithm } from 'jsonwebtoken';
 /**
  * @license Apache-2.0
  * @copyright Cube Dev, Inc.
@@ -32,7 +33,7 @@ interface JWTOptions {
 
   // JWT options
   key?: string,
-  algorithms?: string[],
+  algorithms?: Algorithm[],
   issuer?: string[],
   audience?: string,
   subject?: string,

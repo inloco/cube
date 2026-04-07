@@ -2150,8 +2150,8 @@ class ApiGateway {
     type VerifyTokenFn = (auth: string, secret: string) => Promise<object | string> | object | string;
 
     const verifyToken = (auth, secret) => jwt.verify(auth, secret, {
-      algorithms: <JWTAlgorithm[] | undefined>options?.algorithms,
-      issuer: options?.issuer,
+      algorithms: options?.algorithms ?? <JWTAlgorithm[]>['HS256'],
+      issuer: options?.issuer as string | [string, ...string[]] | undefined,
       audience: options?.audience,
       subject: options?.subject,
     });

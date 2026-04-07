@@ -575,9 +575,9 @@ export class DevServer {
 
     app.post('/playground/token', catchErrors(async (req, res) => {
       const { payload = {} } = req.body;
-      const jwtOptions = typeof payload.exp != null ? {} : { expiresIn: '1d' };
+      const jwtOptions: jwt.SignOptions = typeof payload.exp != null ? {} : { expiresIn: '1d' };
 
-      const token = jwt.sign(payload, options.apiSecret, jwtOptions);
+      const token = jwt.sign(payload, options.apiSecret || 'secret', jwtOptions);
 
       res.json({ token });
     }));
