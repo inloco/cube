@@ -2,8 +2,10 @@ FROM cubejs/rust-builder:bookworm-llvm-18 AS builder
 
 WORKDIR /build/cubestore
 
+# Copy the shared rust dependency from the parent directory (context is now /rust)
 COPY cubeshared /build/cubeshared
 
+# Copy cubestore specific files
 COPY cubestore/rust-toolchain.toml .
 COPY cubestore/Cargo.toml .
 COPY cubestore/Cargo.lock .
@@ -15,18 +17,19 @@ COPY cubestore/cuberpc cuberpc
 COPY cubestore/cubestore-sql-tests cubestore-sql-tests
 COPY cubestore/cubestore/benches cubestore/benches
 COPY cubestore/cubestore/Cargo.toml cubestore/Cargo.toml
+
 RUN mkdir -p cubestore/src/bin && \
     echo "fn main() {print!(\"Dummy main\");} // dummy file" > cubestore/src/bin/cubestored.rs
 
 ARG WITH_AVX2=1
 RUN [ "$WITH_AVX2" -eq "1" ] && export RUSTFLAGS="-C target-feature=+avx2"; \
-    cargo build --release -p cubestore
+    cargo build --release -p cubestore --jobs 1
 
 # Cube Store get version from his own package
 COPY cubestore/package.json package.json
 COPY cubestore/cubestore cubestore
 RUN [ "$WITH_AVX2" -eq "1" ] && export RUSTFLAGS="-C target-feature=+avx2"; \
-    cargo build --release -p cubestore
+    cargo build --release -p cubestore --jobs 1
 
 FROM debian:bookworm-slim
 
