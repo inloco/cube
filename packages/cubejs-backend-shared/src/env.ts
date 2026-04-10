@@ -2094,6 +2094,71 @@ const variables: Record<string, (...args: any) => any> = {
     ]
   ),
 
+  /**
+   * Presto/Trino Unload Bucket
+   */
+  prestoUnloadBucket: ({
+    dataSource,
+  }: {
+    dataSource: string,
+  }) => (
+    process.env[
+      keyByDataSource('CUBEJS_DB_PRESTO_UNLOAD_BUCKET', dataSource)
+    ]
+  ),
+
+  /**
+   * Presto/Trino Unload Prefix
+   */
+  prestoUnloadPrefix: ({
+    dataSource,
+  }: {
+    dataSource: string,
+  }) => (
+    process.env[
+      keyByDataSource('CUBEJS_DB_PRESTO_UNLOAD_PREFIX', dataSource)
+    ]
+  ),
+
+  /**
+   * Presto/Trino Unload Catalog
+   */
+  prestoUnloadCatalog: ({
+    dataSource,
+  }: {
+    dataSource: string,
+  }) => (
+    process.env[
+      keyByDataSource('CUBEJS_DB_PRESTO_UNLOAD_CATALOG', dataSource)
+    ]
+  ),
+
+  /**
+   * Presto/Trino Unload Schema
+   */
+  prestoUnloadSchema: ({
+    dataSource,
+  }: {
+    dataSource: string,
+  }) => (
+    process.env[
+      keyByDataSource('CUBEJS_DB_PRESTO_UNLOAD_SCHEMA', dataSource)
+    ]
+  ),
+
+  /**
+   * Presto/Trino AWS Region
+   */
+  prestoAwsRegion: ({
+    dataSource,
+  }: {
+    dataSource: string,
+  }) => (
+    process.env[
+      keyByDataSource('CUBEJS_DB_PRESTO_AWS_REGION', dataSource)
+    ]
+  ),
+
   /** ***************************************************************
    * Pinot Driver                                                  *
    **************************************************************** */

@@ -11,7 +11,8 @@ import {
   StreamTableData,
   TableStructure,
   BaseDriver,
-  UnloadOptions
+  UnloadOptions,
+  TableCSVData,
 } from '@cubejs-backend/base-driver';
 import {
   getEnv,
@@ -25,6 +26,8 @@ import {
   map, zipObj, prop, concat
 } from 'ramda';
 import SqlString from 'sqlstring';
+import { S3, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const presto = require('presto-client');
 
@@ -52,6 +55,12 @@ export type PrestoDriverConfiguration = PrestoDriverExportBucket & {
   ssl?: string | TLSConnectionOptions;
   dataSource?: string;
   queryTimeout?: number;
+  unloadCatalog?: string;
+  unloadSchema?: string;
+  unloadBucket?: string;
+  unloadPrefix?: string;
+  region?: string;
+  s3Client?: S3
 };
 
 const SUPPORTED_BUCKET_TYPES = ['gcs', 's3'];
@@ -114,6 +123,11 @@ export class PrestoDriver extends BaseDriver implements DriverInterface {
       exportBucketRegion: getEnv('dbExportBucketAwsRegion', { dataSource }),
       credentials: getEnv('dbExportGCSCredentials', { dataSource }),
       queryTimeout: getEnv('dbQueryTimeout', { dataSource }),
+      region: config.region || getEnv('prestoAwsRegion', { dataSource }),
+      unloadBucket: config.unloadBucket || getEnv('prestoUnloadBucket', { dataSource }),
+      unloadPrefix: config.unloadPrefix || getEnv('prestoUnloadPrefix', { dataSource }),
+      unloadCatalog: config.unloadCatalog || getEnv('prestoUnloadCatalog', { dataSource }),
+      unloadSchema: config.unloadSchema || getEnv('prestoUnloadSchema', { dataSource }),
       ...config
     };
     this.catalog = this.config.catalog;
@@ -301,130 +315,97 @@ export class PrestoDriver extends BaseDriver implements DriverInterface {
 
   // Export bucket methods
   public async isUnloadSupported() {
-    return this.config.exportBucket !== undefined;
+    return this.config.unloadBucket !== undefined
+      && this.config.unloadPrefix !== undefined
+      && this.config.unloadCatalog !== undefined
+      && this.config.unloadSchema !== undefined;
   }
 
-  public async unload(tableName: string, options: UnloadOptions) {
-    if (!this.config.exportBucket) {
-      throw new Error('Export bucket is not configured.');
-    }
-
-    if (!SUPPORTED_BUCKET_TYPES.includes(this.config.bucketType as string)) {
-      throw new Error(`Unsupported export bucket type: ${
-        this.config.bucketType
-      }`);
-    }
-
-    const types = options.query
-      ? await this.unloadWithSql(tableName, options.query.sql, options.query.params)
-      : await this.unloadWithTable(tableName);
-
-    const csvFile = await this.getCsvFiles(tableName);
+  public async unload(tableName: string, options: UnloadOptions): Promise<TableCSVData> {
+    const columns = await this.unloadWithSql(tableName, options);
+    const files = await this.getCsvFiles(tableName);
+    const unloadSchema = this.config.unloadSchema!;
+    const unloadCatalog = this.config.unloadCatalog!;
+    const trinoTable = `${unloadCatalog}.${unloadSchema}."${tableName}"`;
 
     return {
-      exportBucketCsvEscapeSymbol: this.config.exportBucketCsvEscapeSymbol,
-      csvFile,
-      types,
+      csvFile: files,
+      types: columns,
       csvNoHeader: true,
+      csvDelimiter: '^A',
+      csvDisableQuoting: true,
+      release: async () => {
+        try {
+          const dropIfExistsSql = `DROP TABLE IF EXISTS ${trinoTable}`;
+          await this.queryPromised(this.prepareQueryWithParams(dropIfExistsSql, []), false);
+        } catch (_e) {
+        }
+      }
     };
   }
 
-  private splitTableFullName(tableFullName: string) {
-    const [schema, tableName] = tableFullName.split('.');
-    return { schema, tableName };
+  private async unloadWithSql(
+    tableName: string,
+    unloadOptions: UnloadOptions,
+  ): Promise<TableStructure> {
+    const unloadSchema = this.config.unloadSchema!;
+    const unloadCatalog = this.config.unloadCatalog!;
+    const trinoTable = `${unloadCatalog}.${unloadSchema}."${tableName}"`;
+
+    const dropIfExistsSql = `DROP TABLE IF EXISTS ${trinoTable}`;
+    await this.query(dropIfExistsSql, []);
+
+    const unloadSql = `
+        CREATE TABLE ${unloadCatalog}.${unloadSchema}."${tableName}"
+        WITH (FORMAT='TEXTFILE') AS ${unloadOptions.query!.sql}
+      `;
+    await this.query(unloadSql, unloadOptions.query!.params);
+    const columns = await this.tableColumns(unloadCatalog, unloadSchema, tableName);
+
+    return columns;
   }
 
-  private generateTableColumnsForExport(types: {name: string, type: string}[]) {
-    return types.map((c) => `CAST(${c.name} AS varchar) ${c.name}`).join(', ');
+  private async tableColumns(catalog: string, schema: string, table: string): Promise<TableStructure> {
+    const columns = await this.query(
+      `SELECT columns.column_name as ${this.quoteIdentifier('column_name')},
+             columns.table_name as ${this.quoteIdentifier('table_name')},
+             columns.table_schema as ${this.quoteIdentifier('table_schema')},
+             columns.data_type  as ${this.quoteIdentifier('data_type')}
+      FROM information_schema.columns
+      WHERE table_catalog = ${this.param(0)} AND table_schema = ${this.param(1)} AND table_name = ${this.param(2)}`,
+      [catalog, schema, table]
+    );
+
+    return columns.map(c => ({ name: c.column_name, type: this.toGenericType(c.data_type) }));
   }
 
-  private async unloadWithSql(tableFullName: string, sql: string, params: any[]) {
-    return this.unloadGeneric({
-      tableFullName,
-      typeSql: sql,
-      typeParams: params,
-      fromSql: sql,
-      fromParams: params
+  public async getCsvFiles(tableName: string): Promise<string[]> {
+    const client = (typeof this.config.s3Client !== 'undefined')
+      ? this.config.s3Client!
+      : new S3({
+        region: this.config.region!,
+        maxAttempts: 10,
+        retryMode: 'adaptive'
+      });
+
+    const list = await client.listObjectsV2({
+      Bucket: this.config.unloadBucket!,
+      Prefix: `${this.config.unloadPrefix}/${tableName}`,
     });
-  }
-
-  private async unloadWithTable(tableFullName: string) {
-    return this.unloadGeneric({
-      tableFullName,
-      typeSql: `SELECT * FROM ${tableFullName}`,
-      typeParams: [],
-      fromSql: tableFullName,
-      fromParams: []
-    });
-  }
-
-  private async unloadGeneric(params: {tableFullName: string, typeSql: string, typeParams: any[], fromSql: string, fromParams: any[]}) {
-    if (!this.config.exportBucket) {
-      throw new Error('Export bucket is not configured.');
-    }
-
-    const { bucketType, exportBucket } = this.config;
-    const types = await this.queryColumnTypes(params.typeSql, params.typeParams);
-
-    const { schema, tableName } = this.splitTableFullName(params.tableFullName);
-    const tableWithCatalogAndSchema = `${this.config.catalog}.${schema}.${tableName}`;
-
-    const protocol = {
-      gcs: 'gs',
-      s3: this.config.exportBucketS3AdvancedFS ? 's3a' : 's3'
-    }[bucketType || 'gcs'];
-
-    const externalLocation = `${protocol}://${exportBucket}/${schema}/${tableName}`;
-    const withParams = `( external_location = '${externalLocation}', format = 'CSV')`;
-    const select = `SELECT ${this.generateTableColumnsForExport(types)} FROM (${params.fromSql})`;
-    const createTableQuery = `CREATE TABLE ${tableWithCatalogAndSchema} WITH ${withParams} AS (${select})`;
-
-    try {
-      await this.query(
-        createTableQuery,
-        params.fromParams,
+    if (!list.Contents) {
+      return [];
+    } else {
+      const files = await Promise.all(
+        list.Contents.map(async (file) => {
+          const command = new GetObjectCommand({
+            Bucket: this.config.unloadBucket,
+            Key: file.Key,
+          });
+          return getSignedUrl(client, command, { expiresIn: 3600 });
+        })
       );
-    } finally {
-      await this.query(`DROP TABLE IF EXISTS ${tableWithCatalogAndSchema}`, []);
-    }
 
-    return types;
-  }
-
-  public async queryColumnTypes(sql: string, params: unknown[]): Promise<{ name: string; type: string; }[]> {
-    const response = await this.stream(`${sql} LIMIT 0`, params || [], { highWaterMark: 1 });
-    const result = [];
-    for (const column of response.types || []) {
-      result.push({ name: column.name, type: this.toGenericType(column.type) });
-    }
-    return result;
-  }
-
-  private async getCsvFiles(
-    tableFullName: string,
-  ): Promise<string[]> {
-    if (!this.config.exportBucket) {
-      throw new Error('Export bucket is not configured.');
-    }
-    const { bucketType, exportBucket } = this.config;
-    const { schema, tableName } = this.splitTableFullName(tableFullName);
-
-    switch (bucketType) {
-      case 'gcs':
-        return this.extractFilesFromGCS({ credentials: this.config.credentials }, exportBucket, `${schema}/${tableName}`);
-      case 's3':
-        return this.extractUnloadedFilesFromS3({
-          credentials: this.config.accessKeyId && this.config.secretAccessKey
-            ? {
-              accessKeyId: this.config.accessKeyId,
-              secretAccessKey: this.config.secretAccessKey,
-            }
-            : undefined,
-          region: this.config.exportBucketRegion,
-        },
-        exportBucket, `${schema}/${tableName}`);
-      default:
-        throw new Error(`Unsupported export bucket type: ${bucketType}`);
+      return files;
     }
   }
 }
