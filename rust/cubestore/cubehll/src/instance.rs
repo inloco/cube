@@ -769,7 +769,7 @@ impl DenseHll {
         let mut sum = 0.;
         for i in 0..num_buckets {
             let value = self.get_value(i);
-            sum += 1.0 / (1 << value) as f64;
+            sum += 1.0 / (1u64 << value) as f64;
         }
 
         let estimate = (alpha(self.index_bit_len) * num_buckets as f64 * num_buckets as f64) / sum;
